@@ -15,9 +15,9 @@ import (
 // This will let the requests finish before shutting down any other open
 // resources with the passed CancelFunc.
 // This function will block until server shutdown is complete
-func WaitForShutdown(s *http.Server, cf context.CancelFunc) {
+func WaitForShutdown(s *http.Server, cf ...context.CancelFunc) {
 	waitForKill()
-	<-shutdownServer(s, cf)
+	<-shutdownServer(s, cf...)
 }
 
 func waitForKill() {
@@ -29,14 +29,16 @@ func waitForKill() {
 // Shutdown the server and then propagate the shutdown to a cancel function.
 
 // Caller should block on the returned channel.
-func shutdownServer(s *http.Server, cf context.CancelFunc) chan bool {
+func shutdownServer(s *http.Server, cf ...context.CancelFunc) chan bool {
 	slog.Info("server shutting down")
 	wchan := make(chan bool)
 	// a large request set can take a while to finish,
 	// so we give the server a couple minutes to finish if it needs to
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	context.AfterFunc(ctx, func() {
-		cf()
+		for _, cancel := range cf {
+			cancel()
+		}
 		// without a little bit of sleep here sometimes final log messages
 		// don't get flushed, even with the file sync above
 		time.Sleep(100 * time.Millisecond)

@@ -57,8 +57,11 @@ func TestCORSOptions(t *testing.T) {
 		},
 	}
 	for _, tt := range test {
-		h := func(w http.ResponseWriter, r *http.Request) {}
 		t.Run(tt.name, func(t *testing.T) {
+			handlerWasRun := false
+			h := func(w http.ResponseWriter, r *http.Request) {
+				handlerWasRun = true
+			}
 			cors := CORS(tt.opts...)
 			handler := cors(h)
 			if handler == nil {
@@ -67,6 +70,9 @@ func TestCORSOptions(t *testing.T) {
 			req := httptest.NewRequest(http.MethodOptions, "http://example.com/foo", nil)
 			w := httptest.NewRecorder()
 			handler(w, req)
+			if handlerWasRun {
+				t.Error("Chain did not terminate for OPTIONS request")
+			}
 			resp := w.Result()
 			if resp.Header.Get("Access-Control-Allow-Origin") != tt.expectOrigin {
 				t.Errorf("unexpected Access-Control-Allow-Origin: got %s, want %s", resp.Header.Get("Access-Control-Allow-Origin"), tt.expectOrigin)
@@ -79,6 +85,56 @@ func TestCORSOptions(t *testing.T) {
 			}
 			if resp.Header.Get("Access-Control-Max-Age") != tt.expectMaxAge {
 				t.Errorf("unexpected Access-Control-Max-Age: got %s, want %s", resp.Header.Get("Access-Control-Max-Age"), tt.expectMaxAge)
+			}
+		})
+	}
+}
+
+func TestCORSMiddleware(t *testing.T) {
+	tests := []struct {
+		name         string
+		opts         []corsOption
+		expectOrigin string
+	}{
+		{
+			name:         "default",
+			expectOrigin: "*",
+		},
+		{
+			name:         "allow specific origin",
+			opts:         []corsOption{AllowOrigin("http://example.com")},
+			expectOrigin: "http://example.com",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handlerWasRun := false
+			h := func(w http.ResponseWriter, r *http.Request) {
+				handlerWasRun = true
+			}
+			cors := CORS(tt.opts...)
+			handler := cors(h)
+			if handler == nil {
+				t.Fatal("handler is nil")
+			}
+			req := httptest.NewRequest(http.MethodGet, "http://example.com/foo", nil)
+			w := httptest.NewRecorder()
+			handler(w, req)
+			if !handlerWasRun {
+				t.Error("handler was not run")
+			}
+			resp := w.Result()
+			if resp.Header.Get("Access-Control-Allow-Origin") != tt.expectOrigin {
+				t.Errorf("unexpected Access-Control-Allow-Origin: got %s, want *", resp.Header.Get("Access-Control-Allow-Origin"))
+			}
+			if resp.Header.Get("Access-Control-Allow-Methods") != "" {
+				t.Errorf("unexpected Access-Control-Allow-Methods: got %s, want empty", resp.Header.Get("Access-Control-Allow-Methods"))
+			}
+			if resp.Header.Get("Access-Control-Allow-Headers") != "" {
+				t.Errorf("unexpected Access-Control-Allow-Headers: got %s, want empty", resp.Header.Get("Access-Control-Allow-Headers"))
+			}
+			if resp.Header.Get("Access-Control-Max-Age") != "" {
+				t.Errorf("unexpected Access-Control-Max-Age: got %s, want empty", resp.Header.Get("Access-Control-Max-Age"))
 			}
 		})
 	}

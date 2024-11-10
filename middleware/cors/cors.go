@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func CORSAllowAllOrigin(next http.HandlerFunc) http.HandlerFunc {
+func AllowAllOrigin(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Set the header to allow all origins
 		w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -48,8 +48,9 @@ func MaxAge(d time.Duration) corsOption {
 	}
 }
 
-// Default allows all methods, all headers, and sets the max age to 1 day.
-func CORS(opts ...corsOption) Step {
+// Default allows all origins methods, all headers, and sets the max age to 1 day.
+// Acts as a terminal middleware if the request is an OPTIONS request.
+func CORS(opts ...corsOption) func(http.HandlerFunc) http.HandlerFunc {
 	cors := &cors{
 		origin:  "*",
 		methods: "*",
@@ -68,6 +69,7 @@ func CORS(opts ...corsOption) Step {
 				w.Header().Set("Access-Control-Allow-Methods", cors.methods)
 				w.Header().Set("Access-Control-Allow-Headers", cors.headers)
 				w.Header().Set("Access-Control-Max-Age", cors.maxAge)
+				return
 			}
 			next(w, r)
 		}
